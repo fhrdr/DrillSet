@@ -1,3 +1,4 @@
+from enum import auto
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import docx
@@ -68,7 +69,7 @@ class ModernQuizApp:
         """设置用户界面"""
         # 创建主容器
         main_container = tk.Frame(self.root, bg=self.colors['bg'])
-        main_container.pack(fill='both', expand=True, padx=20, pady=20)
+        main_container.pack(fill='both', expand=True, padx=10, pady=10)
 
         # 顶部标题和统计区域
         self.create_header(main_container)
@@ -94,7 +95,7 @@ class ModernQuizApp:
 
         # 标题
         title_label = tk.Label(header_frame,
-                               text="📚 人力资源服务刷题系统",
+                               text="📚 刷题系统",
                                font=self.fonts['title'],
                                fg=self.colors['primary'],
                                bg=self.colors['card_bg'])
@@ -142,7 +143,6 @@ class ModernQuizApp:
         """创建左侧题目列表"""
         sidebar = tk.Frame(parent, bg=self.colors['card_bg'], width=250, relief='raised', bd=1)
         sidebar.pack(side='left', fill='y', padx=(0, 10))
-        sidebar.pack_propagate(False)
 
         # 题目列表标题
         list_title = tk.Label(sidebar,
@@ -180,7 +180,7 @@ class ModernQuizApp:
         """创建右侧题目内容区域（带滚动）"""
         # 创建主容器
         question_container = tk.Frame(parent, bg=self.colors['card_bg'], relief='raised', bd=1)
-        question_container.pack(side='right', fill='both', expand=True)
+        question_container.pack(side='right', fill='both', expand=True, padx=(0, 0))
 
         # 创建Canvas和隐藏的Scrollbar
         self.canvas = tk.Canvas(question_container,
@@ -203,7 +203,7 @@ class ModernQuizApp:
 
         # 题目卡片（在scrollable_frame内）
         self.question_card = tk.Frame(self.scrollable_frame, bg=self.colors['card_bg'])
-        self.question_card.pack(fill='both', expand=True, padx=30, pady=30)
+        self.question_card.pack(fill='both', expand=True, padx=20, pady=20)
 
         # 题目类型标签
         self.type_label = tk.Label(self.question_card,
@@ -219,12 +219,12 @@ class ModernQuizApp:
                                      font=self.fonts['question'],
                                      bg=self.colors['card_bg'],
                                      fg=self.colors['text'],
-                                     borderwidth=0,
-                                     padx=0,
-                                     pady=0,
+                                     borderwidth=1,
+                                     relief='solid',
+                                     padx=15,
+                                     pady=10,
                                      height=4,
-                                     state='disabled',
-                                     relief='flat')
+                                     state='normal')
         self.question_text.pack(fill='x', pady=(0, 25))
 
         # 选项容器
@@ -463,7 +463,7 @@ class ModernQuizApp:
 
                 # 开始新题
                 current_question = {
-                    'number': int(question_match.group(1)),
+                    'original_number': int(question_match.group(1)),  # 保留原始编号
                     'question': question_match.group(2),
                     'options': [],
                     'answer': '',
@@ -526,7 +526,52 @@ class ModernQuizApp:
         for q in questions:
             q['type'] = self.determine_question_type(q)
 
+        # 按题型分类并重新编号
+        questions = self.reorder_questions_by_type(questions)
+
         return questions
+
+    def reorder_questions_by_type(self, questions):
+        """按题型分类并重新编号"""
+        # 分离不同题型
+        single_choice = []
+        multiple_choice = []
+        judge_questions = []
+
+        for q in questions:
+            if q['type'] == '单选题':
+                single_choice.append(q)
+            elif q['type'] == '多选题':
+                multiple_choice.append(q)
+            elif q['type'] == '判断题':
+                judge_questions.append(q)
+
+        # 重新编号
+        all_questions = []
+        question_number = 1
+
+        # 单选题
+        for q in single_choice:
+            q['number'] = question_number
+            q['type_order'] = 1  # 题型顺序
+            all_questions.append(q)
+            question_number += 1
+
+        # 多选题
+        for q in multiple_choice:
+            q['number'] = question_number
+            q['type_order'] = 2  # 题型顺序
+            all_questions.append(q)
+            question_number += 1
+
+        # 判断题
+        for q in judge_questions:
+            q['number'] = question_number
+            q['type_order'] = 3  # 题型顺序
+            all_questions.append(q)
+            question_number += 1
+
+        return all_questions
 
     def determine_question_type(self, question):
         """根据选项和答案判断题型"""
@@ -559,6 +604,7 @@ class ModernQuizApp:
         self.question_listbox.delete(0, tk.END)
         for q in self.filtered_questions:
             status = "✓" if q.get('answered_correct', False) else "✗" if q.get('answered', False) else "○"
+            # 显示新编号（按题型排序后的编号）和原始编号
             self.question_listbox.insert(tk.END, f"{status} 第{q['number']}题 {q['type']}")
 
     def display_question(self, index):
@@ -577,14 +623,17 @@ class ModernQuizApp:
         # 更新进度
         self.progress_var.set(f"题目: {index + 1}/{len(self.filtered_questions)}")
 
-        # 更新题目类型
-        self.type_label.config(text=f"{question['type']} - 第{question['number']}题")
+        # 更新题目类型（显示新编号和原始编号）
+        if question.get('original_number'):
+            self.type_label.config(text=f"{question['type']} - 第{question['number']}题 (原{question['original_number']})")
+        else:
+            self.type_label.config(text=f"{question['type']} - 第{question['number']}题")
 
         # 显示题目内容
-        self.question_text.config(state='normal')
         self.question_text.delete('1.0', 'end')
         self.question_text.insert('1.0', question['question'])
-        self.question_text.config(state='disabled')
+        # 保持可滚动状态
+        # self.question_text.config(state='disabled')
 
         # 清除旧的结果显示
         for widget in self.result_frame.winfo_children():
@@ -661,9 +710,9 @@ class ModernQuizApp:
         option_frame.bind('<Button-1>', click_command)
         option_label.bind('<Button-1>', click_command)
 
-        # 绑定鼠标悬停事件
+        # 绑定鼠标悬停事件（仅在未选中且未答题时生效）
         def on_enter(e):
-            if not self.is_answered:
+            if not self.is_answered and not self.is_option_selected(index):
                 option_frame.config(bg=self.colors['hover'])
                 option_label.config(bg=self.colors['hover'])
 
@@ -671,8 +720,9 @@ class ModernQuizApp:
             if not self.is_answered:
                 # 根据选中状态决定背景色
                 if self.is_option_selected(index):
-                    option_frame.config(bg=self.colors['option_selected'])
-                    option_label.config(bg=self.colors['option_selected'])
+                    # 选中时使用更深的蓝色
+                    option_frame.config(bg='#2b579a')
+                    option_label.config(bg='#2b579a')
                 else:
                     option_frame.config(bg=self.colors['option_bg'])
                     option_label.config(bg=self.colors['option_bg'])
@@ -702,8 +752,16 @@ class ModernQuizApp:
             var.set(not var.get())
             if var.get():
                 self.selected_options.add(index)
+                # 更新为选中颜色（深蓝色）
+                frame, label = self.option_widgets[index]
+                frame.config(bg='#2b579a')
+                label.config(bg='#2b579a', fg='white')
             else:
                 self.selected_options.discard(index)
+                # 恢复默认颜色
+                frame, label = self.option_widgets[index]
+                frame.config(bg=self.colors['option_bg'])
+                label.config(bg=self.colors['option_bg'], fg=self.colors['text'])
         else:
             # 单选题和判断题
             self.selected_options.clear()
@@ -713,12 +771,14 @@ class ModernQuizApp:
             for i, (frame, label) in enumerate(self.option_widgets):
                 if i == index:
                     self.option_vars[i].set(index)
-                    frame.config(bg=self.colors['option_selected'])
-                    label.config(bg=self.colors['option_selected'])
+                    # 选中时使用深蓝色背景和白色文字
+                    frame.config(bg='#2b579a')
+                    label.config(bg='#2b579a', fg='white')
                 else:
                     self.option_vars[i].set(-1)
+                    # 未选中时使用默认颜色
                     frame.config(bg=self.colors['option_bg'])
-                    label.config(bg=self.colors['option_bg'])
+                    label.config(bg=self.colors['option_bg'], fg=self.colors['text'])
 
     def toggle_option(self, index, var):
         """切换选项（已弃用）"""
@@ -783,18 +843,32 @@ class ModernQuizApp:
                 # 获取答案
                 answer = question.get('answer', '').strip()
 
-                # 如果有选项，用选项字母判断
+                # 根据选项判断选择的答案
                 if len(question['options']) == 2:
+                    # 有选项的判断题（A.对/正确 B.错/错误）
                     selected_letter = chr(65 + selected_index)  # A或B
-                    # 答案可能是"A"、"B"、"正确"、"错误"
-                    if selected_letter == 'A':
-                        return answer in ['A', '正确', '对']
-                    elif selected_letter == 'B':
-                        return answer in ['B', '错误', '错']
+
+                    # 先获取选项的文本内容来判断
+                    if selected_index < len(question['options']):
+                        option_text = question['options'][selected_index]['text'].strip()
+                        if '对' in option_text or '正确' in option_text:
+                            # 选择了"正确"
+                            return answer in ['A', '正确', '对', 'True']
+                        elif '错' in option_text or '错误' in option_text:
+                            # 选择了"错误"
+                            return answer in ['B', '错误', '错', 'False']
                 else:
-                    # 没有选项的判断题，用文本判断
+                    # 没有选项的判断题，自动创建的是"正确"/"错误"
                     selected_answer = '正确' if selected_index == 0 else '错误'
-                    return selected_answer == answer
+
+                    # 比较答案
+                    if answer in ['正确', '对', 'A', 'True']:
+                        return selected_answer == '正确'
+                    elif answer in ['错误', '错', 'B', 'False']:
+                        return selected_answer == '错误'
+                    else:
+                        # 直接比较
+                        return selected_answer == answer
 
         elif question['type'] == '多选题':
             selected_letters = sorted([chr(65 + i) for i in self.selected_options])
