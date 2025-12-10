@@ -530,16 +530,20 @@ class ModernQuizApp:
 
     def determine_question_type(self, question):
         """根据选项和答案判断题型"""
-        # 根据选项数量判断
-        if len(question['options']) == 0:
-            # 没有选项，可能是判断题
-            if question.get('answer', '') in ['正确', '错误']:
-                return '判断题'
-            else:
-                return '判断题'  # 默认认为是判断题
+        # 检查是否是判断题
+        # 1. 如果选项只有2个且是"对"/"错"或"正确"/"错误"
+        # 2. 如果答案是"正确"/"错误"但没有选项
+        has_judge_options = False
+        if len(question['options']) == 2:
+            opt_texts = [opt['text'].strip() for opt in question['options']]
+            if ('对' in opt_texts and '错' in opt_texts) or ('正确' in opt_texts and '错误' in opt_texts):
+                has_judge_options = True
 
-        # 根据答案格式判断
-        answer = question.get('answer', '')
+        answer = question.get('answer', '').strip()
+        if has_judge_options or answer in ['正确', '错误', 'A', 'B']:
+            return '判断题'
+
+        # 根据答案格式判断其他题型
         if '、' in answer:
             # 答案包含顿号，是多选题
             return '多选题'
@@ -592,10 +596,16 @@ class ModernQuizApp:
             widget.destroy()
 
         # 创建选项
-        if question['type'] == '判断题' or len(question['options']) == 0:
-            # 判断题或无选项题目
-            self.create_option_frame('正确', 0, None)
-            self.create_option_frame('错误', 1, None)
+        if question['type'] == '判断题':
+            # 判断题
+            if len(question['options']) == 2:
+                # 有选项的判断题（A.对 B.错）
+                for i, option in enumerate(question['options']):
+                    self.create_option_frame(option['text'], i, option['letter'])
+            else:
+                # 没有选项的判断题，创建默认选项
+                self.create_option_frame('正确', 0, 'A')
+                self.create_option_frame('错误', 1, 'B')
         else:
             # 有选项的选择题
             for i, option in enumerate(question['options']):
@@ -769,8 +779,22 @@ class ModernQuizApp:
         if question['type'] == '判断题':
             if len(self.selected_options) == 1:
                 selected_index = list(self.selected_options)[0]
-                selected_answer = '正确' if selected_index == 0 else '错误'
-                return selected_answer == question.get('answer', '')
+
+                # 获取答案
+                answer = question.get('answer', '').strip()
+
+                # 如果有选项，用选项字母判断
+                if len(question['options']) == 2:
+                    selected_letter = chr(65 + selected_index)  # A或B
+                    # 答案可能是"A"、"B"、"正确"、"错误"
+                    if selected_letter == 'A':
+                        return answer in ['A', '正确', '对']
+                    elif selected_letter == 'B':
+                        return answer in ['B', '错误', '错']
+                else:
+                    # 没有选项的判断题，用文本判断
+                    selected_answer = '正确' if selected_index == 0 else '错误'
+                    return selected_answer == answer
 
         elif question['type'] == '多选题':
             selected_letters = sorted([chr(65 + i) for i in self.selected_options])
