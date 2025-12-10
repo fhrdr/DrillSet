@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>DrillSet Web</title>
+<style>
+:root{--bg:#f8f9fa;--card:#ffffff;--text:#202124;--sub:#5f6368;--primary:#4285f4;--success:#34a853;--error:#ea4335;--border:#e0e0e0;--hover:#f1f3f4;--deep:#2b579a}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei UI",Roboto,Helvetica,Arial,sans-serif}
+.app{max-width:900px;margin:0 auto;padding:12px}
+.header{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}
+.title{font-size:20px;color:var(--primary);font-weight:700}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.btn{appearance:none;border:1px solid var(--border);background:#fff;color:var(--text);padding:8px 12px;border-radius:10px;font-size:14px;white-space:nowrap;line-height:1;flex:0 0 auto}
+.btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn.warn{background:#fbbc05;color:#fff;border-color:#fbbc05}
+.select{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#fff;font-size:14px;white-space:nowrap}
+.file{position:relative;overflow:hidden}
+.file input{position:absolute;inset:0;opacity:0}
+.content{margin-top:12px;background:var(--card);border:1px solid var(--border);border-radius:12px}
+.card{padding:12px}
+.type{font-size:14px;color:var(--primary);font-weight:700;margin-bottom:8px}
+.question{text-align:justify;font-size:16px;line-height:1.6;border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff;word-break:break-word}
+.options{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.option{display:flex;align-items:flex-start;gap:10px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px}
+.option.selected{background:var(--deep);color:#fff;border-color:var(--deep)}
+.result{margin-top:14px}
+.result .line{height:1px;background:var(--border);margin:10px 0}
+.result .title{font-size:16px;font-weight:700}
+.answer{white-space:pre-wrap;border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff}
+.footer{position:sticky;bottom:0;background:var(--bg);padding:12px}
+.bar{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.list-panel{position:fixed;inset:auto 0 0 0;max-height:60%;background:var(--card);border-top:1px solid var(--border);border-radius:12px 12px 0 0;transform:translateY(100%);transition:.2s;box-shadow:0 -10px 20px rgba(0,0,0,.06)}
+.list-panel.show{transform:translateY(0)}
+.list-head{display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid var(--border)}
+.list{overflow:auto;max-height:45vh}
+.list-item{padding:12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+.stat{font-size:13px;color:var(--sub)}
+@media(min-width:768px){.list-panel{left:auto;right:12px;bottom:12px;width:320px;max-height:70vh;border-radius:12px;transform:translateY(10px);opacity:0}.list-panel.show{transform:translateY(0);opacity:1}}
+@media(max-width:420px){.btn{font-size:13px;padding:7px 10px}.select{font-size:13px;padding:7px 10px}.title{font-size:18px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="title">📚 刷题系统</div>
+      <div class="stat" id="stat">题目: 0/0</div>
+    </div>
+    <div class="actions">
+      <label class="btn file">📁 加载<input id="file" type="file" accept=".txt"></label>
+      <select id="filter" class="select">
+        <option>全部</option>
+        <option>单选题</option>
+        <option>多选题</option>
+        <option>判断题</option>
+      </select>
+      <button class="btn" id="toggleList">列表</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="type" id="type"></div>
+      <div class="question" id="question"></div>
+      <div class="options" id="options"></div>
+      <div class="result" id="result" style="display:none">
+        <div class="line"></div>
+        <div class="title" id="resultTitle"></div>
+        <div class="answer" id="answer"></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">
+    <div class="bar">
+      <button class="btn" id="prev" title="上一题">⬅ 上一</button>
+      <button class="btn primary" id="submit" title="提交答案">✓ 提交</button>
+      <button class="btn" id="next" title="下一题">下一 ➡</button>
+    </div>
+    <div class="bar" style="margin-top:8px">
+      <button class="btn" id="random">🎲 随机</button>
+      <button class="btn warn" id="reset">⟲ 重置</button>
+    </div>
+  </div>
+  <div class="list-panel" id="panel">
+    <div class="list-head">
+      <div>题目列表</div>
+      <button class="btn" id="closePanel">关闭</button>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+</div>
+<script>
+const state={questions:[],filtered:[],index:0,selected:new Set(),answered:false,correct:0,total:0}
+const els={file:document.getElementById('file'),filter:document.getElementById('filter'),toggleList:document.getElementById('toggleList'),panel:document.getElementById('panel'),closePanel:document.getElementById('closePanel'),list:document.getElementById('list'),stat:document.getElementById('stat'),type:document.getElementById('type'),question:document.getElementById('question'),options:document.getElementById('options'),result:document.getElementById('result'),resultTitle:document.getElementById('resultTitle'),answer:document.getElementById('answer'),prev:document.getElementById('prev'),next:document.getElementById('next'),submit:document.getElementById('submit'),random:document.getElementById('random'),reset:document.getElementById('reset')}
+function parse(lines){const qs=[];let cur=null;let i=0;while(i<lines.length){const line=lines[i];const qm=line.match(/^([0-9]+)\.\s*(.*)/);if(qm){if(cur){qs.push(cur)}cur={originalNumber:parseInt(qm[1]),question:qm[2],options:[],answer:"",analysis:"",type:"未知"} } else if(/^[A-D]\.\s*/.test(line)){if(cur){const parts=line.split('.',2);if(parts.length===2){cur.options.push({letter:parts[0],text:parts[1].trim()})}}} else if(line.startsWith('答案：')){if(cur){const ans=line.replace('答案：','').trim();let analysis='';if(i+1<lines.length && lines[i+1].startsWith('解析：')){i++;analysis=lines[i].replace('解析：','').trim();let j=i+1;while(j<lines.length && !/^([0-9]+)\./.test(lines[j]) && !lines[j].startsWith('答案：')){analysis+="\n"+lines[j].trim();j++}i=j-1}cur.answer=ans;cur.answerAnalysis=analysis?ans+"\n\n解析："+analysis:ans}} else if(line.startsWith('解析：')){if(cur){let analysis=line.replace('解析：','').trim();let j=i+1;while(j<lines.length && !/^([0-9]+)\./.test(lines[j]) && !lines[j].startsWith('答案：')){analysis+="\n"+lines[j].trim();j++}i=j-1;if(cur.answerAnalysis){cur.answerAnalysis+="\n\n"+analysis}else{cur.answerAnalysis=analysis}}}i++}if(cur){qs.push(cur)}qs.forEach(q=>{q.type=detectType(q)});return qs}
+function detectType(q){let judge=false;if(q.options.length===2){const t=q.options.map(o=>o.text.trim());if((t.includes('对')&&t.includes('错'))||(t.includes('正确')&&t.includes('错误'))){judge=true}}const a=(q.answer||'').trim();if(judge||['正确','错误','A','B'].includes(a))return '判断题';if(a.includes('、'))return '多选题';if(['A','B','C','D'].includes(a)||a.length===1)return '单选题';return '单选题'}
+function setFilter(type){if(type==='全部'){state.filtered=[...state.questions]}else{state.filtered=state.questions.filter(q=>q.type===type)}state.index=0;renderList();if(state.filtered.length){show(0)}else{els.type.textContent='';els.question.textContent='没有符合条件的题目';els.options.innerHTML='';els.result.style.display='none'} }
+function renderList(){els.list.innerHTML='';state.filtered.forEach((q,i)=>{const status=q.answered? (q.answeredCorrect?'✓':'✗'):'○';const div=document.createElement('div');div.className='list-item';const left=document.createElement('div');left.textContent=`${status} 第${i+1}题 ${q.type}`;const right=document.createElement('button');right.className='btn';right.textContent='打开';right.onclick=()=>{show(i);togglePanel(false)};div.appendChild(left);div.appendChild(right);els.list.appendChild(div)});els.stat.textContent=`题目: ${state.index+1}/${state.filtered.length}`}
+function show(idx){if(!state.filtered.length||idx<0||idx>=state.filtered.length)return;state.index=idx;state.answered=false;state.selected.clear();els.result.style.display='none';const q=state.filtered[idx];els.stat.textContent=`题目: ${idx+1}/${state.filtered.length}`;els.type.textContent=`${q.type} - 第${idx+1}题${q.originalNumber?` (原${q.originalNumber})`:''}`;els.question.textContent=q.question;els.options.innerHTML='';if(q.type==='判断题'){if(q.options.length===2){q.options.forEach((o,i)=>createOption(o.text,i,o.letter))}else{createOption('正确',0,'A');createOption('错误',1,'B')}}else{q.options.forEach((o,i)=>createOption(o.text,i,o.letter))}els.prev.disabled=idx===0;els.next.disabled=idx>=state.filtered.length-1;els.submit.disabled=false}
+function createOption(text,index,letter){const div=document.createElement('div');div.className='option';const label=document.createElement('div');label.textContent=`${letter?letter+'. ':''}${text}`;div.appendChild(label);div.onclick=()=>clickOption(index);els.options.appendChild(div)}
+function isSelected(index){const q=state.filtered[state.index];if(q.type==='多选题'){return state.selected.has(index)}return state.selected.has(index)}
+function clickOption(index){if(state.answered)return;const q=state.filtered[state.index];if(q.type==='多选题'){if(state.selected.has(index)){state.selected.delete(index)}else{state.selected.add(index)}updateOptionStyles()}else{state.selected.clear();state.selected.add(index);updateOptionStyles()}}
+function updateOptionStyles(){[...els.options.children].forEach((el,i)=>{const selected=isSelected(i);el.classList.toggle('selected',selected)})}
+function submit(){if(state.answered)return;if(!state.selected.size){alert('请选择答案后再提交');return}state.answered=true;state.total+=1;const q=state.filtered[state.index];const ok=check(q);if(ok){state.correct+=1;q.answeredCorrect=true}q.answered=true;showResult(q,ok);renderList();els.submit.disabled=true}
+function check(q){if(q.type==='判断题'){if(state.selected.size===1){const idx=[...state.selected][0];const ans=(q.answer||'').trim();if(q.options.length===2){const t=q.options[idx].text.trim();if(t.includes('对')||t.includes('正确'))return ['A','正确','对','True'].includes(ans);if(t.includes('错')||t.includes('错误'))return ['B','错误','错','False'].includes(ans)}else{const sel=idx===0?'正确':'错误';if(['正确','对','A','True'].includes(ans))return sel==='正确';if(['错误','错','B','False'].includes(ans))return sel==='错误';return sel===ans}}return false} if(q.type==='多选题'){const sel=[...state.selected].map(i=>String.fromCharCode(65+i)).sort();const cor=(q.answer||'').split('、').map(s=>s.trim()).sort();return JSON.stringify(sel)===JSON.stringify(cor)} if(q.type==='单选题'){if(state.selected.size===1){const idx=[...state.selected][0];const sel=String.fromCharCode(65+idx);return sel===(q.answer||'')}}return false}
+function showResult(q,ok){els.result.style.display='block';els.resultTitle.textContent=ok?'✓ 回答正确！':'✗ 回答错误';els.resultTitle.style.color=ok? 'var(--success)':'var(--error)';if(q.answerAnalysis){els.answer.textContent=q.answerAnalysis}else{els.answer.textContent=`正确答案：${q.answer||''}`}}
+function prev(){if(state.index>0)show(state.index-1)}
+function next(){if(state.index<state.filtered.length-1)show(state.index+1)}
+function random(){if(state.filtered.length){const i=Math.floor(Math.random()*state.filtered.length);show(i)}}
+function reset(){if(confirm('确定要重置所有答题记录吗？')){state.questions.forEach(q=>{q.answered=false;q.answeredCorrect=false});state.correct=0;state.total=0;show(state.index);renderList()}}
+function togglePanel(show){els.panel.classList.toggle('show',show)}
+els.toggleList.onclick=()=>togglePanel(true)
+els.closePanel.onclick=()=>togglePanel(false)
+els.prev.onclick=prev
+els.next.onclick=next
+els.random.onclick=random
+els.reset.onclick=reset
+els.submit.onclick=submit
+els.filter.onchange=e=>setFilter(e.target.value)
+els.file.onchange=e=>{const f=e.target.files[0];if(!f){return}if(!f.name.toLowerCase().endsWith('.txt')){alert('请加载 .txt 题库文件');return}const reader=new FileReader();reader.onload=ev=>{const content=ev.target.result;const lines=content.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);state.questions=parse(lines);state.filtered=[...state.questions];state.index=0;renderList();if(state.filtered.length)show(0)};reader.readAsText(f,'utf-8')}
+async function tryLoadDefault(){try{const res=await fetch('sets/题库1.txt');if(!res.ok)throw new Error('not found');const content=await res.text();const lines=content.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);state.questions=parse(lines);state.filtered=[...state.questions];state.index=0;renderList();if(state.filtered.length)show(0)}catch(err){}}
+document.addEventListener('DOMContentLoaded',()=>{tryLoadDefault()})
+</script>
+</body>
+</html>
